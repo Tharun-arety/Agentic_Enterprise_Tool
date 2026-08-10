@@ -1,1 +1,11 @@
-{"framework":"nextjs","buildCommand":"npm run build"}
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://agentic-enterprise-api.vercel.app/api/:path*"
+    }
+  ]
+}

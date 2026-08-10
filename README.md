@@ -55,7 +55,7 @@ role to approve it. Nothing an agent does takes effect on its own authority.
 ```bash
 cd backend
 python -m venv .venv
-.venv\Scripts\python.exe -m pip install -r requirements.txt
+.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 copy .env.example .env
 ```
 

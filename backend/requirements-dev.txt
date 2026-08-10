@@ -1,0 +1,8 @@
+# Runtime plus the local/CI verification toolchain.
+-r requirements.txt
+
+pytest>=8.3
+pytest-asyncio>=0.24
+# Ships PostgreSQL and pgvector for isolated local tests. Production runtimes
+# must not carry these server binaries.
+pgserver>=0.1.4

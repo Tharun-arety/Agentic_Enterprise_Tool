@@ -48,11 +48,3 @@ Pillow>=11.0
 # FastMCP ships inside the `mcp` package; mcp_server.py registers the same
 # tool registry the LangGraph nodes call in-process.
 mcp>=1.1
-
-# --- Tests -------------------------------------------------------------------
-pytest>=8.3
-pytest-asyncio>=0.24
-# Ships the PostgreSQL binaries and pgvector in a wheel, so the suite starts its
-# own server and needs no database, container or daemon. Set TEST_DATABASE_URL
-# to run against a remote database instead.
-pgserver>=0.1.4

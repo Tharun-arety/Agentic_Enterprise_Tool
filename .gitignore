@@ -15,9 +15,11 @@ backend/.env
 !backend/.env.example
 
 # --- Node / Next ----------------------------------------------------------
+.vercel/
 node_modules/
 frontend/.next/
 frontend/out/
+backend/.vercel/
 *.tsbuildinfo
 
 # --- Local runtime state ------------------------------------------------------
