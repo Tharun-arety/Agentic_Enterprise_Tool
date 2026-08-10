@@ -1,0 +1,31 @@
+# --- Python ---------------------------------------------------------------
+backend/.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Secrets --------------------------------------------------------------
+# .env holds the Neon connection string and the OpenAI key. Never commit it.
+.env
+.env.local
+.env.production
+backend/.env
+!backend/.env.example
+
+# --- Node / Next ----------------------------------------------------------
+node_modules/
+frontend/.next/
+frontend/out/
+*.tsbuildinfo
+
+# --- Local runtime state ------------------------------------------------------
+# Content-addressed blobs written by the local FileStore, the throwaway vaults
+# the test suite creates, and the PostgreSQL cluster `pgserver` initialises for
+# tests. All reproducible; none of it is source.
+backend/var/
+
+# --- OS -------------------------------------------------------------------
+.DS_Store
+Thumbs.db

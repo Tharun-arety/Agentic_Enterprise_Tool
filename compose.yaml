@@ -1,0 +1,132 @@
+name: magnotherm
+x-app: &app
+  build: ./backend
+  env_file: ${ENV_FILE:-.env.production}
+  restart: unless-stopped
+  security_opt: [no-new-privileges:true]
+  depends_on:
+    redis: {condition: service_healthy}
+
+services:
+  api:
+    <<: *app
+    ports: ["127.0.0.1:8000:8000"]
+    volumes: [minio-staging:/app/var]
+  scheduler:
+    <<: *app
+    command: ["python","-m","app.workers.scheduler"]
+    volumes: [minio-staging:/app/var]
+  worker:
+    <<: *app
+    command: ["python","-m","app.workers.outbox"]
+    volumes: [minio-staging:/app/var]
+  redis:
+    image: redis:7.4.1-alpine
+    command: ["redis-server","--appendonly","yes","--requirepass","${REDIS_PASSWORD}"]
+    restart: unless-stopped
+    healthcheck: {test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep PONG"], interval: 10s, timeout: 3s, retries: 10}
+    environment: {REDIS_PASSWORD: "${REDIS_PASSWORD}"}
+    volumes: [redis-data:/data]
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z
+    command: server /data --console-address :9001
+    env_file: ${ENV_FILE:-.env.production}
+    restart: unless-stopped
+    volumes: [minio-data:/data]
+    healthcheck: {test: ["CMD", "mc", "ready", "local"], interval: 15s, timeout: 5s, retries: 10}
+
+  mariadb:
+    image: mariadb:11.8.3
+    command: ["--character-set-server=utf8mb4","--collation-server=utf8mb4_unicode_ci"]
+    env_file: ${ENV_FILE:-.env.production}
+    restart: unless-stopped
+    volumes: [mariadb-data:/var/lib/mysql]
+    healthcheck: {test: ["CMD-SHELL", "mariadb-admin ping -h localhost -p$$MYSQL_ROOT_PASSWORD"], interval: 10s, timeout: 5s, retries: 20}
+  erp-redis-cache:
+    image: redis:7.4.1-alpine
+    restart: unless-stopped
+  erp-redis-queue:
+    image: redis:7.4.1-alpine
+    restart: unless-stopped
+    volumes: [erp-redis-queue:/data]
+  erp-configurator:
+    image: &erp_image frappe/erpnext:v16.29.0
+    restart: "no"
+    entrypoint: ["bash","-c"]
+    command:
+      - >-
+        ls -1 apps > sites/apps.txt;
+        bench set-config -g db_host mariadb;
+        bench set-config -gp db_port 3306;
+        bench set-config -g redis_cache redis://erp-redis-cache:6379;
+        bench set-config -g redis_queue redis://erp-redis-queue:6379;
+        bench set-config -g socketio_port 9000;
+    volumes: [erp-sites:/home/frappe/frappe-bench/sites]
+    depends_on: {mariadb: {condition: service_healthy}, erp-redis-cache: {condition: service_started}, erp-redis-queue: {condition: service_started}}
+  erp-create-site:
+    image: *erp_image
+    restart: "no"
+    entrypoint: ["bash","-c"]
+    command:
+      - >-
+        wait-for-it -t 120 mariadb:3306;
+        wait-for-it -t 120 erp-redis-cache:6379;
+        wait-for-it -t 120 erp-redis-queue:6379;
+        test -d sites/${ERPNEXT_SITE} || bench new-site --mariadb-user-host-login-scope='%' --admin-password='${ERPNEXT_ADMIN_PASSWORD}' --db-root-username=root --db-root-password='${MYSQL_ROOT_PASSWORD}' --install-app erpnext --set-default ${ERPNEXT_SITE};
+    volumes: [erp-sites:/home/frappe/frappe-bench/sites]
+    depends_on: {erp-configurator: {condition: service_completed_successfully}}
+  erp-backend: &erp_backend
+    image: *erp_image
+    restart: unless-stopped
+    volumes: [erp-sites:/home/frappe/frappe-bench/sites]
+    depends_on: {erp-create-site: {condition: service_completed_successfully}}
+  erp-frontend:
+    image: *erp_image
+    restart: unless-stopped
+    command: ["nginx-entrypoint.sh"]
+    environment: {BACKEND: "erp-backend:8000", SOCKETIO: "erp-websocket:9000", FRAPPE_SITE_NAME_HEADER: "${ERPNEXT_SITE}", UPSTREAM_REAL_IP_ADDRESS: "127.0.0.1", UPSTREAM_REAL_IP_HEADER: "X-Forwarded-For", UPSTREAM_REAL_IP_RECURSIVE: "off", PROXY_READ_TIMEOUT: "120", CLIENT_MAX_BODY_SIZE: "50m"}
+    ports: ["127.0.0.1:8080:8080"]
+    volumes: [erp-sites:/home/frappe/frappe-bench/sites]
+    depends_on: [erp-backend,erp-websocket]
+  erp-websocket:
+    <<: *erp_backend
+    command: ["node","/home/frappe/frappe-bench/apps/frappe/socketio.js"]
+  erp-queue-short:
+    <<: *erp_backend
+    command: ["bench","worker","--queue","short,default"]
+  erp-queue-long:
+    <<: *erp_backend
+    command: ["bench","worker","--queue","long,default,short"]
+  erp-scheduler:
+    <<: *erp_backend
+    command: ["bench","schedule"]
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: [observability]
+    restart: unless-stopped
+    volumes: ["./ops/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro",prometheus-data:/prometheus]
+  loki:
+    image: grafana/loki:3.5.3
+    profiles: [observability]
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    volumes: [loki-data:/loki]
+  grafana:
+    image: grafana/grafana:12.1.0
+    profiles: [observability]
+    restart: unless-stopped
+    env_file: ${ENV_FILE:-.env.production}
+    ports: ["100.64.0.1:3000:3000"]
+    volumes: [grafana-data:/var/lib/grafana]
+
+volumes:
+  redis-data: {}
+  minio-data: {}
+  minio-staging: {}
+  mariadb-data: {}
+  erp-redis-queue: {}
+  erp-sites: {}
+  prometheus-data: {}
+  loki-data: {}
+  grafana-data: {}

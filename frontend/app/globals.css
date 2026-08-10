@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+/*
+ * Magnotherm ERP theme.
+ * Cool neutrals with a cyan accent — the product is a cooling system, and the
+ * palette is doing double duty as a status language: cyan for the
+ * magnetocaloric path, amber for magnets, slate for structure.
+ */
+
+:root {
+  --background: #f6f7f9;
+  --surface: #ffffff;
+  --surface-muted: #f1f3f6;
+  --foreground: #0f172a;
+  --muted-foreground: #64748b;
+  --border: #e2e8f0;
+  --accent: #0891b2;
+  --accent-foreground: #ffffff;
+  --lafesi: #0891b2;
+  --neodymium: #b45309;
+  --polymer: #7c3aed;
+  --fluid: #0ea5e9;
+  --assembly: #475569;
+  --warning: #b45309;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0b1120;
+    --surface: #111a2e;
+    --surface-muted: #16203a;
+    --foreground: #e2e8f0;
+    --muted-foreground: #94a3b8;
+    --border: #1e293b;
+    --accent: #22d3ee;
+    --accent-foreground: #04212b;
+    --lafesi: #22d3ee;
+    --neodymium: #fbbf24;
+    --polymer: #a78bfa;
+    --fluid: #38bdf8;
+    --assembly: #94a3b8;
+    --warning: #fbbf24;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-lafesi: var(--lafesi);
+  --color-neodymium: var(--neodymium);
+  --color-polymer: var(--polymer);
+  --color-fluid: var(--fluid);
+  --color-assembly: var(--assembly);
+  --color-warning: var(--warning);
+  --font-sans: ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Slim scrollbars so the chat rail and BOM tree don't feel heavy. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}

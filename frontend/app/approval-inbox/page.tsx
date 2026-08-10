@@ -1,0 +1,1 @@
+import {EnterprisePage} from "@/components/EnterprisePage"; export default function Page(){return <EnterprisePage title="Approval inbox" subtitle="Every agent mutation waits here before application" path="/api/proposals?status=pending"/>}

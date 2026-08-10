@@ -1,0 +1,1 @@
+import {EnterprisePage} from "@/components/EnterprisePage"; export default function Page(){return <EnterprisePage title="Controlling" subtitle="Recursive MBOM material/labour rollup in EUR" path="/api/controlling/rollup/ECL-SYS-1000?batch_size=10"/>}

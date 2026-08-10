@@ -1,0 +1,1 @@
+import {EnterprisePage} from "@/components/EnterprisePage"; export default function Page(){return <EnterprisePage title="Programs & TRL" subtitle="Work packages, consortium delivery, milestones and readiness gates" path="/api/programs/trl"/>}

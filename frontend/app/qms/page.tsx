@@ -1,0 +1,1 @@
+import {EnterprisePage} from "@/components/EnterprisePage"; export default function Page(){return <EnterprisePage title="Quality management" subtitle="Test verdicts, NCRs and unit genealogy" path="/api/qms/ECL-M-104"/>}

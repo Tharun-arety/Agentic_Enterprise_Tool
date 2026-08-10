@@ -1,0 +1,1 @@
+import {EnterprisePage} from "@/components/EnterprisePage"; export default function Page(){return <EnterprisePage title="Audit trail" subtitle="Correlated human, agent and integration activity" path="/api/audit"/>}

@@ -1,0 +1,1 @@
+import {EnterprisePage} from "@/components/EnterprisePage"; export default function Page(){return <EnterprisePage title="Customers & field" subtitle="Opportunities, customer sites, deployed units and service history" path="/api/crm/opportunities"/>}

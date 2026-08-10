@@ -1,0 +1,1 @@
+import {EnterprisePage} from "@/components/EnterprisePage"; export default function Page(){return <EnterprisePage title="Lab assets" subtitle="Calibration validity, due dates, rig bookings and conflicts" path="/api/assets/calibration"/>}

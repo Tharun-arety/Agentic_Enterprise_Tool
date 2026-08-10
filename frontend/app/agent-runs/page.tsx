@@ -1,0 +1,1 @@
+import {EnterprisePage} from "@/components/EnterprisePage"; export default function Page(){return <EnterprisePage title="Agent runs" subtitle="Trajectory, timing, model snapshot, tokens and tool evidence" path="/api/agent-runs"/>}

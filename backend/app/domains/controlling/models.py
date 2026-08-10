@@ -1,0 +1,23 @@
+from __future__ import annotations
+import uuid
+from datetime import date, datetime
+from typing import Any
+from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+from sqlalchemy.orm import Mapped, mapped_column
+from app.core.db import Base
+
+class WorkCentreRate(Base):
+    __tablename__="work_centre_rates"; id: Mapped[uuid.UUID]=mapped_column(PGUUID(as_uuid=True),primary_key=True,default=uuid.uuid4); work_center: Mapped[str]=mapped_column(String(64),unique=True,index=True); hourly_rate: Mapped[float]=mapped_column(Numeric(12,4)); currency: Mapped[str]=mapped_column(String(3),default="EUR"); effective_from: Mapped[date]=mapped_column(Date,default=date.today)
+class CostCentre(Base):
+    __tablename__="cost_centres"; id: Mapped[uuid.UUID]=mapped_column(PGUUID(as_uuid=True),primary_key=True,default=uuid.uuid4); code: Mapped[str]=mapped_column(String(32),unique=True,index=True); name: Mapped[str]=mapped_column(String(160)); external_id: Mapped[str|None]=mapped_column(String(128))
+class Budget(Base):
+    __tablename__="budgets"; id: Mapped[uuid.UUID]=mapped_column(PGUUID(as_uuid=True),primary_key=True,default=uuid.uuid4); cost_centre_id: Mapped[uuid.UUID]=mapped_column(PGUUID(as_uuid=True),ForeignKey("cost_centres.id"),index=True); work_package_id: Mapped[uuid.UUID|None]=mapped_column(PGUUID(as_uuid=True),ForeignKey("work_packages.id"),index=True); fiscal_year: Mapped[int]=mapped_column(); amount: Mapped[float]=mapped_column(Numeric(16,2)); currency: Mapped[str]=mapped_column(String(3),default="EUR"); source_currency: Mapped[str]=mapped_column(String(3),default="EUR")
+class Commitment(Base):
+    __tablename__="commitments"; id: Mapped[uuid.UUID]=mapped_column(PGUUID(as_uuid=True),primary_key=True,default=uuid.uuid4); cost_centre_id: Mapped[uuid.UUID]=mapped_column(PGUUID(as_uuid=True),ForeignKey("cost_centres.id"),index=True); work_package_id: Mapped[uuid.UUID|None]=mapped_column(PGUUID(as_uuid=True),ForeignKey("work_packages.id"),index=True); reference: Mapped[str]=mapped_column(String(128),unique=True); amount: Mapped[float]=mapped_column(Numeric(16,2)); currency: Mapped[str]=mapped_column(String(3),default="EUR"); source_amount: Mapped[float]=mapped_column(Numeric(16,2)); source_currency: Mapped[str]=mapped_column(String(3)); occurred_on: Mapped[date]=mapped_column(Date,default=date.today)
+class Actual(Base):
+    __tablename__="actuals"; id: Mapped[uuid.UUID]=mapped_column(PGUUID(as_uuid=True),primary_key=True,default=uuid.uuid4); cost_centre_id: Mapped[uuid.UUID]=mapped_column(PGUUID(as_uuid=True),ForeignKey("cost_centres.id"),index=True); work_package_id: Mapped[uuid.UUID|None]=mapped_column(PGUUID(as_uuid=True),ForeignKey("work_packages.id"),index=True); reference: Mapped[str]=mapped_column(String(128),unique=True); amount: Mapped[float]=mapped_column(Numeric(16,2)); currency: Mapped[str]=mapped_column(String(3),default="EUR"); source_amount: Mapped[float]=mapped_column(Numeric(16,2)); source_currency: Mapped[str]=mapped_column(String(3)); occurred_on: Mapped[date]=mapped_column(Date,default=date.today)
+class CostTarget(Base):
+    __tablename__="cost_targets"; id: Mapped[uuid.UUID]=mapped_column(PGUUID(as_uuid=True),primary_key=True,default=uuid.uuid4); part_id: Mapped[uuid.UUID]=mapped_column(PGUUID(as_uuid=True),ForeignKey("parts.id"),index=True); target_cost: Mapped[float]=mapped_column(Numeric(16,4)); currency: Mapped[str]=mapped_column(String(3),default="EUR"); valid_from: Mapped[date]=mapped_column(Date,default=date.today)
+class CostRollupSnapshot(Base):
+    __tablename__="cost_rollup_snapshots"; id: Mapped[uuid.UUID]=mapped_column(PGUUID(as_uuid=True),primary_key=True,default=uuid.uuid4); part_id: Mapped[uuid.UUID]=mapped_column(PGUUID(as_uuid=True),ForeignKey("parts.id"),index=True); revision_id: Mapped[uuid.UUID]=mapped_column(PGUUID(as_uuid=True),ForeignKey("part_revisions.id"),index=True); baseline_id: Mapped[uuid.UUID|None]=mapped_column(PGUUID(as_uuid=True),ForeignKey("configuration_baselines.id"),index=True); eco_id: Mapped[uuid.UUID|None]=mapped_column(PGUUID(as_uuid=True),index=True); material_cost: Mapped[float]=mapped_column(Numeric(16,4)); labour_cost: Mapped[float]=mapped_column(Numeric(16,4)); total_cost: Mapped[float]=mapped_column(Numeric(16,4)); currency: Mapped[str]=mapped_column(String(3),default="EUR"); batch_size: Mapped[float]=mapped_column(Numeric(12,2),default=1); details: Mapped[dict[str,Any]]=mapped_column(JSONB); captured_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),server_default=func.now()); captured_by: Mapped[uuid.UUID|None]=mapped_column(PGUUID(as_uuid=True))

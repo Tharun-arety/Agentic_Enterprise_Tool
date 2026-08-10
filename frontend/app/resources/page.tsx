@@ -1,0 +1,1 @@
+import {EnterprisePage} from "@/components/EnterprisePage"; export default function Page(){return <EnterprisePage title="Resource capacity" subtitle="Engineer allocations, work-package loading and availability" path="/api/resources/capacity"/>}

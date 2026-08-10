@@ -1,0 +1,58 @@
+# Magnotherm toolchain — backend runtime dependencies.
+# Install:  .venv\Scripts\python.exe -m pip install -r requirements.txt
+
+# --- Web layer -------------------------------------------------------------
+fastapi>=0.115
+uvicorn[standard]>=0.32
+sse-starlette>=2.1
+
+# --- Data layer ------------------------------------------------------------
+# SQLAlchemy 2.x async ORM over asyncpg. pgvector supplies the Vector column
+# type that KnowledgeEmbedding.embedding is declared with.
+SQLAlchemy[asyncio]>=2.0.36
+asyncpg>=0.30
+pgvector>=0.3.6
+greenlet>=3.1
+
+# --- Config ----------------------------------------------------------------
+pydantic>=2.9
+pydantic-settings>=2.6
+python-dotenv>=1.0
+
+# --- Schema migrations -------------------------------------------------------
+alembic>=1.14
+
+# --- Identity ----------------------------------------------------------------
+# argon2-cffi directly rather than passlib: passlib imports the stdlib `crypt`
+# module, which Python 3.13 removed.
+argon2-cffi>=23.1
+PyJWT>=2.9
+
+# --- AI orchestration ------------------------------------------------------
+# LangGraph owns the graph; the official OpenAI SDK owns every model call.
+langgraph>=0.2.50
+openai>=1.55
+httpx>=0.27
+redis>=5.2
+prometheus-fastapi-instrumentator>=7.1
+python-multipart>=0.0.17
+pypdf>=5.1
+python-docx>=1.1
+openpyxl>=3.1
+beautifulsoup4>=4.12
+pytesseract>=0.3.13
+pdf2image>=1.17
+Pillow>=11.0
+
+# --- Model Context Protocol ------------------------------------------------
+# FastMCP ships inside the `mcp` package; mcp_server.py registers the same
+# tool registry the LangGraph nodes call in-process.
+mcp>=1.1
+
+# --- Tests -------------------------------------------------------------------
+pytest>=8.3
+pytest-asyncio>=0.24
+# Ships the PostgreSQL binaries and pgvector in a wheel, so the suite starts its
+# own server and needs no database, container or daemon. Set TEST_DATABASE_URL
+# to run against a remote database instead.
+pgserver>=0.1.4

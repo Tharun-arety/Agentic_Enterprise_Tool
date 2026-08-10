@@ -1,0 +1,1 @@
+import {EnterprisePage} from "@/components/EnterprisePage"; export default function Page(){return <EnterprisePage title="Product data management" subtitle="EBOM/MBOM, revision effectivity and configuration structure" path="/api/parts/ECL-SYS-1000/bom?bom_type=MBOM"/>}

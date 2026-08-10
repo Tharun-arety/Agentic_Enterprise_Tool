@@ -1,0 +1,1 @@
+import {EnterprisePage} from "@/components/EnterprisePage"; export default function Page(){return <EnterprisePage title="Engineering change" subtitle="ECR impact, CCB approval, ECO release and ECN evidence" path="/api/ecm/requests"/>}

@@ -1,0 +1,1 @@
+import {EnterprisePage} from "@/components/EnterprisePage"; export default function Page(){return <EnterprisePage title="Evaluation results" subtitle="Trajectory, retrieval, citation, permission and cost regressions" path="/api/evals"/>}

@@ -1,0 +1,1 @@
+import {EnterprisePage} from "@/components/EnterprisePage"; export default function Page(){return <EnterprisePage title="Controlled knowledge" subtitle="Ingestion, extraction, indexing, ACLs and exact citations" path="/api/knowledge/ingestion"/>}

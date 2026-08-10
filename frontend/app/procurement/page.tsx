@@ -1,0 +1,1 @@
+import {EnterprisePage} from "@/components/EnterprisePage"; export default function Page(){return <EnterprisePage title="Procurement & stock risk" subtitle="Supplier receipts, lot traceability, reorder and long-lead exposure" path="/api/procurement/stock-risk"/>}
