@@ -441,6 +441,7 @@ async def step_4_graph() -> None:
         ("What is the ECLIPSE 1kW chiller made of?", "pdm", "get_bom_structure"),
         ("Show me the test metrics for serial ECL-M-104", "qms", "query_qms_test_metrics"),
         ("Why did the AMR geometry change?", "knowledge", "search_engineering_knowledge"),
+        ("Show ECR-26-002 impact, CCB status, and cost exposure", "ecm", "get_change_request"),
     ]
 
     for message, expected_intent, expected_tool in cases:
@@ -475,6 +476,10 @@ async def step_4_graph() -> None:
             bool(state.get("final_text")),
             f"{expected_intent}: produced final text",
         )
+        if expected_intent == "ecm":
+            answer = state.get("final_text", "")
+            check("approved (4/4 seats voted)" in answer, "ecm: reports exact CCB quorum")
+            check("Cost exposure:" in answer and "Δ EUR" in answer, "ecm: reports persisted cost delta")
 
         # Frame ordering is the contract the UI depends on: state before data,
         # data before prose.

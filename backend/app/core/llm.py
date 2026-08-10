@@ -127,9 +127,11 @@ class OpenAIModelClient(ModelClient):
         usage: TokenUsage | None = None,
     ) -> dict[str, Any]:
         try:
+            settings = get_settings()
             response = await self._client.chat.completions.create(
                 model=self._model,
                 messages=messages,
+                reasoning_effort=settings.openai_reasoning_effort,
                 response_format={
                     "type": "json_schema",
                     "json_schema": {
@@ -138,7 +140,8 @@ class OpenAIModelClient(ModelClient):
                         "schema": schema,
                     },
                 },
-                max_completion_tokens=min(768, get_settings().agent_token_budget),
+                max_completion_tokens=min(768, settings.agent_token_budget),
+                timeout=settings.model_timeout_seconds,
             )
         except Exception:  # noqa: BLE001 - live provider degradation is recoverable
             logger.exception("OpenAI router call failed; using deterministic router fallback")
@@ -162,7 +165,9 @@ class OpenAIModelClient(ModelClient):
                 model=self._model,
                 messages=messages,
                 tools=tools,
+                reasoning_effort=settings.openai_reasoning_effort,
                 max_completion_tokens=completion_limit,
+                timeout=settings.model_timeout_seconds,
             )
         except Exception:  # noqa: BLE001 - live provider degradation is recoverable
             logger.exception("OpenAI tool call failed; using deterministic tool fallback")
@@ -206,13 +211,19 @@ class OpenAIModelClient(ModelClient):
         usage: TokenUsage | None = None,
     ) -> AsyncIterator[str]:
         emitted = False
+        settings = get_settings()
         try:
             stream = await self._client.chat.completions.create(
                 model=self._synthesis_model,
                 messages=messages,
                 stream=True,
                 stream_options={"include_usage": True},
-                max_completion_tokens=min(3072, get_settings().agent_token_budget),
+                reasoning_effort=settings.openai_reasoning_effort,
+                max_completion_tokens=min(
+                    settings.openai_synthesis_max_tokens,
+                    settings.agent_token_budget,
+                ),
+                timeout=settings.model_timeout_seconds,
             )
             async for chunk in stream:
                 if chunk.usage is not None:

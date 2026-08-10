@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     # lopsided: the router fires on every message and each spoke makes 2+ calls
     # per turn, while synthesis is exactly one call per turn.
     openai_synthesis_model: str = ""
+    # Retrieval and evidence synthesis are latency-sensitive, bounded tasks.
+    # GPT-5 reasoning tokens count as output tokens, so leaving effort implicit
+    # can exhaust a completion budget before any visible text is streamed.
+    openai_reasoning_effort: str = "minimal"
+    openai_synthesis_max_tokens: int = 1024
 
     # Cheapest OpenAI embedding model. Changing this to a model with a
     # different width requires a re-seed (see EMBEDDING_DIMENSIONS).
