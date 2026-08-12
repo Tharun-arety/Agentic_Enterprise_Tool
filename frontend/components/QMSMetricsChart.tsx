@@ -1,197 +1,210 @@
 "use client";
 
 import * as React from "react";
-import { Activity } from "lucide-react";
 import {
   CartesianGrid,
-  Legend,
   Line,
   LineChart,
+  ReferenceArea,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 
-import { formatClock, formatNumber } from "@/lib/utils";
-import type { QmsResponse } from "@/lib/types";
+import { formatDate, formatQuantity, formatTime, formatTimestamp, humanise } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import type { LabTestRecord, MetricSummary } from "@/lib/types";
 
 /**
- * Temperature span and pressure drop on one chart.
+ * Acceptance metrics over the life of one article, one panel per metric.
  *
- * They differ by roughly two orders of magnitude (≈16 K against ≈850 mbar), so
- * they get separate Y axes. On a shared axis the span line would be pinned flat
- * against the baseline and the 0.9 K of variation — the thing an engineer is
- * actually looking at — would be invisible.
+ * Small multiples rather than a single combined chart: the four metrics are in
+ * different units, and putting them on one plot would need two y-scales, which
+ * is the one thing a chart must never do.
+ *
+ * Pass and fail are carried by *position* — whether a point sits inside the
+ * shaded acceptable band — not by the colour of the dot. That is deliberate:
+ * the obvious green-dot/red-dot encoding puts the two most important states at
+ * ΔE 6.5 under deuteranopia, which is well inside the range where a red-green
+ * reader cannot separate them. Breaching points also take a different shape.
+ * Colour here only repeats what the geometry already says.
  */
 
-const SPAN_COLOR = "#0891b2";
-const PRESSURE_COLOR = "#b45309";
+type MetricKey = keyof Pick<
+  LabTestRecord,
+  | "temperature_span_delta_K"
+  | "pressure_drop_mbar"
+  | "magnetization_cycles_hz"
+  | "cooling_capacity_W"
+>;
 
-export function QMSMetricsChart({ qms }: { qms: QmsResponse | null }) {
-  const data = React.useMemo(
-    () =>
-      (qms?.records ?? []).map((record) => ({
-        time: formatClock(record.recorded_at),
-        span: record.temperature_span_delta_K,
-        pressure: record.pressure_drop_mbar,
-        capacity: record.cooling_capacity_W,
-      })),
-    [qms],
+interface Point {
+  recorded_at: string;
+  value: number;
+  breached: boolean;
+}
+
+function metricTitle(metric: string): string {
+  return humanise(metric.replace(/_(delta_K|mbar|W|hz|Hz)$/i, "").replace(/_/g, " "));
+}
+
+export function QMSMetricsChart({
+  records,
+  summaries,
+}: {
+  records: LabTestRecord[];
+  summaries: MetricSummary[];
+}) {
+  if (records.length < 2 || summaries.length === 0) return null;
+
+  // Oldest first: a trajectory reads left to right.
+  const ordered = [...records].sort(
+    (a, b) => new Date(a.recorded_at).valueOf() - new Date(b.recorded_at).valueOf(),
   );
 
-  if (!qms || data.length === 0) {
-    return (
-      <div className="text-muted-foreground flex flex-col items-center gap-2 py-10 text-center text-xs">
-        <Activity className="size-5 opacity-40" />
-        <p>
-          No QMS samples loaded. Start the backend and seed the database, or ask
-          the agent for test metrics.
-        </p>
-      </div>
-    );
-  }
-
-  const spanSummary = qms.summaries.find(
-    (summary) => summary.metric === "temperature_span_delta_K",
-  );
-  const pressureSummary = qms.summaries.find(
-    (summary) => summary.metric === "pressure_drop_mbar",
-  );
+  // An endurance run puts every sample on one day, and a date axis then reads
+  // "08 Apr" five times. Switch to clock time when the run fits inside a day.
+  const days = new Set(ordered.map((record) => record.recorded_at.slice(0, 10)));
+  const tickFormat = days.size > 1 ? "date" : "time";
 
   return (
-    <div data-testid="qms-chart">
-      <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {qms.summaries.map((summary) => (
-          <div key={summary.metric} className="bg-surface-muted rounded-lg p-2">
-            <p className="text-muted-foreground truncate text-[10px] uppercase tracking-wide">
-              {summary.metric.replace(/_/g, " ")}
-            </p>
-            <p className="mt-0.5 font-mono text-sm font-semibold">
-              {formatNumber(summary.latest, 1)}
-              <span className="text-muted-foreground ml-1 text-[10px] font-normal">
-                {summary.unit}
-              </span>
-            </p>
-            <p className="text-muted-foreground text-[10px]">
-              {formatNumber(summary.minimum, 1)} – {formatNumber(summary.maximum, 1)}
-            </p>
-          </div>
-        ))}
-      </div>
+    <div className="grid gap-x-6 gap-y-5 lg:grid-cols-2">
+      {summaries.map((summary) => (
+        <MetricPanel
+          key={summary.metric}
+          summary={summary}
+          tickFormat={tickFormat}
+          points={ordered.map((record) => ({
+            recorded_at: record.recorded_at,
+            value: record[summary.metric as MetricKey],
+            breached: record.breaches.some((breach) => breach.metric === summary.metric),
+          }))}
+        />
+      ))}
+    </div>
+  );
+}
 
-      <div className="h-64 w-full">
+function MetricPanel({
+  summary,
+  points,
+  tickFormat,
+}: {
+  summary: MetricSummary;
+  points: Point[];
+  tickFormat: "date" | "time";
+}) {
+  const values = points.map((point) => point.value);
+  const bounds = [
+    ...values,
+    ...(summary.lower_limit !== null ? [summary.lower_limit] : []),
+    ...(summary.upper_limit !== null ? [summary.upper_limit] : []),
+  ];
+  const low = Math.min(...bounds);
+  const high = Math.max(...bounds);
+  const pad = (high - low || Math.abs(high) || 1) * 0.2;
+  const domain: [number, number] = [low - pad, high + pad];
+
+  const latest = points[points.length - 1];
+  const anyBreach = points.some((point) => point.breached);
+
+  return (
+    <figure className="min-w-0">
+      <figcaption className="mb-1 flex items-baseline justify-between gap-3">
+        <span className="text-ink-dim min-w-0 truncate text-xs">
+          {metricTitle(summary.metric)}
+        </span>
+        <span
+          className={cn(
+            "ident shrink-0 text-sm font-semibold",
+            latest.breached ? "text-breach" : anyBreach ? "text-warm" : "text-verified",
+          )}
+        >
+          {formatQuantity(latest.value)} {summary.unit}
+        </span>
+      </figcaption>
+
+      <div className="h-28 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart
-            data={data}
-            margin={{ top: 8, right: 8, bottom: 4, left: -8 }}
-          >
-            <CartesianGrid
-              strokeDasharray="3 3"
-              stroke="var(--border)"
-              vertical={false}
+          <LineChart data={points} margin={{ top: 4, right: 6, bottom: 0, left: 0 }}>
+            <CartesianGrid stroke="var(--rule)" strokeDasharray="2 4" vertical={false} />
+            {/* The acceptable region. A point below or above it has failed, and
+                that is visible from its position alone. */}
+            <ReferenceArea
+              y1={summary.lower_limit ?? domain[0]}
+              y2={summary.upper_limit ?? domain[1]}
+              fill="var(--verified)"
+              fillOpacity={0.1}
+              stroke="var(--rule-strong)"
+              strokeOpacity={0.6}
             />
             <XAxis
-              dataKey="time"
-              stroke="var(--muted-foreground)"
-              fontSize={11}
+              dataKey="recorded_at"
+              tickFormatter={(value: string) =>
+                tickFormat === "time" ? formatTime(value) : formatDate(value).slice(0, 6)
+              }
+              tick={{ fontSize: 10, fill: "var(--ink-faint)" }}
+              stroke="var(--rule)"
               tickLine={false}
-              axisLine={{ stroke: "var(--border)" }}
+              interval="preserveStartEnd"
             />
             <YAxis
-              yAxisId="span"
-              stroke={SPAN_COLOR}
-              fontSize={11}
+              domain={domain}
+              width={38}
+              tick={{ fontSize: 10, fill: "var(--ink-faint)" }}
+              stroke="var(--rule)"
               tickLine={false}
-              axisLine={false}
-              // Padded rather than zero-based: the story is the variation
-              // within a ~1 K band, not the distance from absolute zero.
-              domain={["dataMin - 0.4", "dataMax + 0.4"]}
-              tickFormatter={(value: number) => formatNumber(value, 1)}
-            />
-            <YAxis
-              yAxisId="pressure"
-              orientation="right"
-              stroke={PRESSURE_COLOR}
-              fontSize={11}
-              tickLine={false}
-              axisLine={false}
-              domain={["dataMin - 5", "dataMax + 5"]}
-              tickFormatter={(value: number) => formatNumber(value, 0)}
+              tickFormatter={(value: number) => formatQuantity(value)}
             />
             <Tooltip
+              cursor={{ stroke: "var(--rule-strong)", strokeWidth: 1 }}
               contentStyle={{
-                background: "var(--surface)",
-                border: "1px solid var(--border)",
-                borderRadius: "0.5rem",
-                fontSize: "12px",
-                color: "var(--foreground)",
+                background: "var(--panel)",
+                border: "1px solid var(--rule)",
+                borderRadius: 4,
+                fontSize: 11,
+                color: "var(--ink)",
               }}
-              labelStyle={{ color: "var(--muted-foreground)" }}
-              // Recharts types the value as possibly undefined, so it is
-              // coerced here rather than asserted.
-              formatter={(value, name) => {
-                const numeric = Number(value ?? 0);
-                const label = String(name ?? "");
-                return [
-                  label === "Temperature span"
-                    ? `${formatNumber(numeric, 2)} K`
-                    : `${formatNumber(numeric, 1)} mbar`,
-                  label,
-                ];
-              }}
-            />
-            <Legend
-              wrapperStyle={{ fontSize: "11px" }}
-              iconType="plainline"
-              iconSize={14}
+              labelFormatter={(value) => formatTimestamp(String(value))}
+              formatter={(value) => [
+                `${formatQuantity(Number(value))} ${summary.unit}`,
+                metricTitle(summary.metric),
+              ]}
             />
             <Line
-              yAxisId="span"
               type="monotone"
-              dataKey="span"
-              name="Temperature span"
-              stroke={SPAN_COLOR}
+              dataKey="value"
+              stroke="var(--ink-dim)"
               strokeWidth={2}
-              dot={{ r: 3, strokeWidth: 0, fill: SPAN_COLOR }}
-              activeDot={{ r: 5 }}
-            />
-            <Line
-              yAxisId="pressure"
-              type="monotone"
-              dataKey="pressure"
-              name="Pressure drop"
-              stroke={PRESSURE_COLOR}
-              strokeWidth={2}
-              strokeDasharray="4 3"
-              dot={{ r: 3, strokeWidth: 0, fill: PRESSURE_COLOR }}
-              activeDot={{ r: 5 }}
+              isAnimationActive={false}
+              dot={<Marker />}
+              activeDot={{ r: 5, fill: "var(--cold)", stroke: "var(--panel)", strokeWidth: 2 }}
             />
           </LineChart>
         </ResponsiveContainer>
       </div>
+    </figure>
+  );
+}
 
-      <p className="text-muted-foreground mt-2 text-[11px]">
-        Serial{" "}
-        <span className="text-foreground font-mono font-semibold">
-          {qms.serial_number}
-        </span>
-        {qms.part_number && (
-          <>
-            {" "}
-            · instance of{" "}
-            <span className="font-mono">{qms.part_number}</span>
-          </>
-        )}
-        {spanSummary && pressureSummary && (
-          <>
-            {" "}
-            · span {formatNumber(spanSummary.minimum, 1)}–
-            {formatNumber(spanSummary.maximum, 1)} K at{" "}
-            {formatNumber(pressureSummary.mean, 0)} mbar nominal
-          </>
-        )}
-      </p>
-    </div>
+/**
+ * A sample. Breaching samples are drawn as an open ring rather than a filled
+ * dot, so the two states differ in shape as well as colour.
+ */
+function Marker(props: { cx?: number; cy?: number; payload?: Point }) {
+  const { cx, cy, payload } = props;
+  if (cx === undefined || cy === undefined || !payload) return null;
+  return payload.breached ? (
+    <circle
+      cx={cx}
+      cy={cy}
+      r={4.5}
+      fill="var(--panel)"
+      stroke="var(--breach)"
+      strokeWidth={2.5}
+    />
+  ) : (
+    <circle cx={cx} cy={cy} r={3} fill="var(--verified)" stroke="var(--panel)" strokeWidth={1.5} />
   );
 }

@@ -13,9 +13,13 @@ import type {
   QmsResponse,
 } from "./types";
 
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ??
-  (process.env.NODE_ENV === "production" ? "" : "http://127.0.0.1:8000");
+/**
+ * Empty by default in both environments: `/api` is same-origin and proxied —
+ * by `vercel.json` in production, by `next.config.ts` in development. Set
+ * `NEXT_PUBLIC_API_BASE_URL` only to point a build at some other host, and
+ * expect the session cookie not to follow it.
+ */
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 
 /** The seeded demo unit — the ECLIPSE regenerator module instance under test. */
 export const DEMO_SERIAL = "ECL-M-104";

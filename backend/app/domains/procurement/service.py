@@ -1,9 +1,8 @@
 from __future__ import annotations
-from datetime import date
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.domains.backoffice.integration import enqueue
-from app.domains.procurement.models import GoodsReceipt, PurchaseOrder, PurchaseOrderLine, ReceiptLot, StockPosition, Supplier
+from app.domains.procurement.models import GoodsReceipt, PurchaseOrder, PurchaseOrderLine, ReceiptLot, StockPosition
 from app.domains.procurement.schemas import ReceiptIn
 from app.domains.qms.models import Unit, UnitComponent
 from app.domains.pdm.models import Part
@@ -23,6 +22,15 @@ async def receive(session:AsyncSession,payload:ReceiptIn,user_id=None):
         stock.on_hand=float(stock.on_hand)+item.accepted_quantity
     await enqueue(session,"procurement.receipt",str(receipt.id),{"receipt_number":receipt.receipt_number,"purchase_order_id":str(po.id)},f"receipt:{receipt.id}"); await session.commit(); return receipt
 async def supply_risk(session:AsyncSession):
-    rows=(await session.execute(select(StockPosition,Part).join(Part,Part.id==StockPosition.part_id).order_by(Part.part_number))).all(); today=date.today(); return [{"part_number":p.part_number,"on_hand":float(s.on_hand),"allocated":float(s.allocated),"available":float(s.on_hand)-float(s.allocated),"reorder_level":float(s.reorder_level),"low_stock":float(s.on_hand)-float(s.allocated)<float(s.reorder_level),"lead_time_days":p.lead_time_days} for s,p in rows]
+    """On-hand cover against the reorder level, worst exposure first.
+
+    The description and lead time travel with the row on purpose: a shortfall
+    on a 90-day neodymium array is a different conversation from a shortfall on
+    a stock O-ring, and sorting by lead time is how a buyer decides which one
+    to chase this morning.
+    """
+    rows=(await session.execute(select(StockPosition,Part).join(Part,Part.id==StockPosition.part_id))).all()
+    risks=[{"part_number":p.part_number,"description":p.description,"on_hand":float(s.on_hand),"allocated":float(s.allocated),"available":float(s.on_hand)-float(s.allocated),"reorder_level":float(s.reorder_level),"low_stock":float(s.on_hand)-float(s.allocated)<float(s.reorder_level),"lead_time_days":p.lead_time_days,"make_or_buy":p.make_or_buy} for s,p in rows]
+    return sorted(risks,key=lambda r:(not r["low_stock"],-(r["lead_time_days"] or 0),r["part_number"]))
 async def affected_units(session:AsyncSession,lot_number:str):
     rows=(await session.execute(select(Unit.serial_number,Part.part_number).join(UnitComponent,UnitComponent.unit_id==Unit.id).join(Part,Part.id==UnitComponent.part_id).where((UnitComponent.lot_number==lot_number)|(UnitComponent.supplier_lot==lot_number)).distinct())).all(); return [{"serial_number":s,"part_number":p} for s,p in rows]

@@ -21,7 +21,7 @@ from app.domains.ecm.release import release_change_order
 from app.domains.ecm.schemas import ChangeOrderLineIn
 from app.domains.identity.models import Role
 from app.domains.knowledge.models import KnowledgeEmbedding
-from app.domains.pdm.models import Part, PartRevision
+from app.domains.pdm.models import BomType, Part, PartRevision
 from app.domains.pdm.service import get_bom_structure
 from app.tools.registry import ToolError
 from tests.conftest import principal_for
@@ -570,7 +570,16 @@ async def test_the_superseded_revision_keeps_its_own_structure(
         )
     ).scalar_one()
     await session.refresh(old_rev, ["child_edges"])
-    assert len(old_rev.child_edges) == 2, "revision A still contains both components"
+    # Count the two views separately. Releasing an order re-derives the
+    # manufacturing bill, so a revision carries MBOM lines as well as EBOM
+    # ones, and a bare `len(child_edges)` silently conflates them — it read 4
+    # here and told you nothing about which view had gained a line.
+    kept = [edge for edge in old_rev.child_edges if edge.bom_type is BomType.EBOM]
+    assert len(kept) == 2, "revision A still contains both components"
+    # The as-built manufacturing structure has to survive too: a unit built to
+    # revision A was made to revision A's routing, not to the one that replaced it.
+    manufacturing = [edge for edge in old_rev.child_edges if edge.bom_type is BomType.MBOM]
+    assert len(manufacturing) == 2, "revision A keeps the MBOM it was built to"
     assert old_rev.superseded_by_id is not None
 
 
@@ -815,3 +824,4 @@ async def test_releasing_through_a_tool_needs_systems_engineering_approval(
     assert (
         await service.get_change_order(session, eco.number)
     ).status is EcoStatus.RELEASED
+

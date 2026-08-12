@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test --project=behaviour",
+    "test:visual": "playwright test --project=visual"
   },
   "dependencies": {
     "clsx": "^2.1.1",

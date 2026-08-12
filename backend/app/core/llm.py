@@ -101,6 +101,22 @@ class OpenAIModelClient(ModelClient):
         self._synthesis_model = settings.synthesis_model
         self._fallback = StubModelClient()
 
+    @staticmethod
+    def _tuning(model: str) -> dict[str, Any]:
+        """Per-model request options.
+
+        `reasoning_effort` is only accepted by the reasoning families. Sending
+        it to a GPT-4 class model returns 400 "Unrecognized request argument",
+        and because every call site treats provider failure as recoverable, the
+        whole agent silently answered from the deterministic stub while
+        `/api/health` still reported a live model. Point the configuration at
+        `gpt-4o-mini` and nothing worked, with nothing saying so.
+        """
+        settings = get_settings()
+        family = model.lower()
+        supports_effort = family.startswith(("gpt-5", "o1", "o3", "o4"))
+        return {"reasoning_effort": settings.openai_reasoning_effort} if supports_effort else {}
+
     def _log_usage(
         self, node: str, model: str, response: Any, counter: TokenUsage | None = None
     ) -> None:
@@ -131,7 +147,7 @@ class OpenAIModelClient(ModelClient):
             response = await self._client.chat.completions.create(
                 model=self._model,
                 messages=messages,
-                reasoning_effort=settings.openai_reasoning_effort,
+                **self._tuning(self._model),
                 response_format={
                     "type": "json_schema",
                     "json_schema": {
@@ -165,7 +181,7 @@ class OpenAIModelClient(ModelClient):
                 model=self._model,
                 messages=messages,
                 tools=tools,
-                reasoning_effort=settings.openai_reasoning_effort,
+                **self._tuning(self._model),
                 max_completion_tokens=completion_limit,
                 timeout=settings.model_timeout_seconds,
             )
@@ -218,7 +234,9 @@ class OpenAIModelClient(ModelClient):
                 messages=messages,
                 stream=True,
                 stream_options={"include_usage": True},
-                reasoning_effort=settings.openai_reasoning_effort,
+                # Tuned for the synthesis model, which can differ from the
+                # retrieval one — that is the whole point of the split.
+                **self._tuning(self._synthesis_model),
                 max_completion_tokens=min(
                     settings.openai_synthesis_max_tokens,
                     settings.agent_token_budget,

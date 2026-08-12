@@ -1,29 +1,55 @@
 import { expect, test } from "@playwright/test";
 
-const sections = ["PDM", "QMS", "Procurement", "CRM", "Programs", "Assets", "Resources", "Controlling", "Knowledge", "ECM", "Agent runs", "Evals", "Audit", "Approvals"];
+/**
+ * Every section reachable from the sidebar, driven the way a person drives it —
+ * by clicking the navigation rather than by re-entering URLs.
+ */
+const SECTIONS = [
+  "Product data",
+  "Engineering change",
+  "Knowledge",
+  "Units & tests",
+  "Lab assets",
+  "Procurement",
+  "Customers",
+  "Controlling",
+  "Programmes",
+  "Resourcing",
+  "Approvals",
+  "Agent runs",
+  "Evaluations",
+  "Audit trail",
+];
 
-test("admin can load every enterprise page without client errors", async ({ page }) => {
-  const browserErrors: string[] = [];
-  page.on("pageerror", (error) => browserErrors.push(error.message));
+test.setTimeout(3 * 60_000);
+
+test("admin can load every section without a client error", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
 
   await page.goto("/");
-  await page.getByLabel("Email").fill("admin@magnotherm.test");
-  await page.getByLabel("Password").fill("magnotherm");
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Engineering operations" }),
-  ).toBeVisible();
-  await expect(page.getByText("PUBLIC PRODUCT BASELINE · SYNTHETIC OPERATIONS")).toBeVisible();
-  await expect(page.getByText("GR-2026-0018")).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("button", { name: /^Admin/ }).click();
+
+  // Sign-in is a round trip to Postgres, which is slower than the 5s default
+  // expectation window when the database is cold.
+  const sidebar = page.getByRole("navigation", { name: "Sections" });
+  await expect(sidebar).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: /ECLIPSE/ })).toBeVisible();
+
+  // The overview's evidence chain is the product thesis; if these references
+  // stop appearing the seed has drifted away from the story it tells.
+  await expect(page.getByText("GR-2026-0018")).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText("MAG-L-2312").first()).toBeVisible();
   await expect(page.getByText("ECR-26-002").first()).toBeVisible();
 
-  for (const section of sections) {
-    await page.getByTitle(section).click();
-    await expect(page.locator("h1")).toBeVisible();
-    await expect(page.locator(".animate-pulse")).toHaveCount(0, { timeout: 15_000 });
-    await expect(page.locator(".text-warning")).toHaveCount(0);
+  for (const section of SECTIONS) {
+    await sidebar.getByRole("link", { name: section, exact: true }).click();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(page.locator(".animate-pulse")).toHaveCount(0, { timeout: 20_000 });
+    // No view should be reporting a failed read. Scoped to the work surface:
+    // the Next.js dev overlay mounts an empty `role="alert"` of its own.
+    await expect(page.locator("#work-surface").getByRole("alert")).toHaveCount(0);
   }
 
-  expect(browserErrors).toEqual([]);
+  expect(errors).toEqual([]);
 });

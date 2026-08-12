@@ -16,16 +16,13 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     DateTime,
     Enum as SAEnum,
-    ForeignKey,
     String,
     Text,
     func,
-    Boolean,
     Computed,
     ForeignKey,
     Index,
     Integer,
-    LargeBinary,
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, TSVECTOR, UUID as PGUUID

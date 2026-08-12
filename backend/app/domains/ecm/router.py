@@ -57,10 +57,13 @@ def _http(exc: ToolError) -> HTTPException:
 async def list_requests(
     session: Annotated[AsyncSession, Depends(get_session)],
     status_filter: Annotated[str | None, Query(alias="status")] = None,
+    priority: Annotated[str | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
 ) -> list[ChangeRequestOut]:
     try:
-        return await service.list_change_requests(session, status_filter, limit)
+        return await service.list_change_requests(
+            session, status=status_filter, priority=priority, limit=limit
+        )
     except ToolError as exc:
         raise _http(exc) from exc
 

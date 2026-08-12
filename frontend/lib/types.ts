@@ -300,7 +300,12 @@ export interface KnowledgeHit {
   text_content: string;
   source_ref: string | null;
   related_part_number: string | null;
-  similarity: number;
+  /**
+   * Cosine similarity, or null when the hit came from a full-text match alone
+   * or the deterministic fallback provider is in use. Null means there is no
+   * score to report — never substitute a number for it.
+   */
+  similarity: number | null;
   chunk_id: string | null;
   source_document_id: string | null;
   revision: string | null;
@@ -389,4 +394,421 @@ export type AgentEvent =
 export interface ChatTurn {
   role: "user" | "assistant";
   content: string;
+}
+
+// --- Overview --------------------------------------------------------------
+
+export interface ShowcaseCounts {
+  controlled_parts: number;
+  built_units: number;
+  test_samples: number;
+  failed_samples: number;
+  open_ncrs: number;
+  low_stock_items: number;
+  indexed_documents: number;
+  pending_proposals: number;
+}
+
+export interface WorkflowStep {
+  domain: string;
+  title: string;
+  reference: string;
+  detail: string;
+  status: string;
+  href: string;
+}
+
+export interface ShowcaseResponse {
+  generated_at: string;
+  product: string;
+  product_number: string;
+  counts: ShowcaseCounts;
+  workflow: WorkflowStep[];
+}
+
+// --- Engineering change ----------------------------------------------------
+
+export interface CcbReview {
+  seat: string;
+  reviewer_label: string;
+  decision: string;
+  comment: string | null;
+  decided_at: string | null;
+}
+
+export interface Quorum {
+  required_seats: string[];
+  voted_seats: string[];
+  missing_seats: string[];
+  rejecting_seats: string[];
+  blocking_seats: string[];
+  satisfied: boolean;
+  verdict: string;
+}
+
+export interface AffectedAssembly {
+  part_number: string;
+  revision: string;
+  depth: number;
+  quantity: number;
+}
+
+export interface AffectedProduct {
+  part_number: string;
+  description: string;
+  revision: string;
+  reached_via: string[];
+}
+
+export interface AffectedDocument {
+  document_number: string;
+  title: string;
+  kind: string;
+  latest_revision: string | null;
+}
+
+export interface RevalidationTarget {
+  serial_number: string;
+  part_number: string;
+  sample_count: number;
+  latest_recorded_at: string | null;
+}
+
+export interface CostImpactRow {
+  part_number: string;
+  baseline_from: string | null;
+  baseline_to: string | null;
+  before: number | null;
+  after: number | null;
+  delta: number | null;
+  note: string | null;
+}
+
+export interface ImpactFindings {
+  affected_items: string[];
+  affected_assemblies: AffectedAssembly[];
+  affected_products: AffectedProduct[];
+  affected_documents: AffectedDocument[];
+  revalidation_required: RevalidationTarget[];
+  affected_baselines: string[];
+  configuration_items: string[];
+  cost_impact: CostImpactRow[];
+  gaps: string[];
+}
+
+export interface ImpactAssessment {
+  id: string;
+  generated_at: string;
+  generated_by: string;
+  summary: string;
+  findings: ImpactFindings;
+}
+
+export interface ChangeRequest {
+  id: string;
+  number: string;
+  title: string;
+  problem_statement: string;
+  proposed_solution: string | null;
+  preliminary_impact: string | null;
+  originator_label: string | null;
+  origin: string;
+  priority: string;
+  status: string;
+  created_at: string;
+  submitted_at: string | null;
+  decided_at: string | null;
+  affected_part_numbers: string[];
+  reviews: CcbReview[];
+  quorum: Quorum | null;
+  latest_assessment: ImpactAssessment | null;
+}
+
+// --- Controlling -----------------------------------------------------------
+
+export interface MaterialCostLine {
+  part_number: string;
+  extended_quantity: number;
+  standard_cost: number | null;
+  extended_cost: number | null;
+}
+
+export interface LabourCostLine {
+  operation_seq: number;
+  work_center: string;
+  minutes_per_unit: number;
+  hourly_rate: number;
+  cost: number;
+}
+
+export interface CostRollup {
+  part_number: string;
+  revision: string;
+  batch_size: number;
+  material_cost: number;
+  labour_cost: number;
+  total_cost: number;
+  currency: string;
+  materials: MaterialCostLine[];
+  labour: LabourCostLine[];
+}
+
+// --- Supply and business ---------------------------------------------------
+
+export interface Opportunity {
+  id: string;
+  title: string;
+  customer_name: string;
+  stage: string;
+  value: number;
+  currency: string;
+  expected_close: string | null;
+}
+
+export interface StockRisk {
+  part_number: string;
+  description: string | null;
+  on_hand: number;
+  allocated: number;
+  available: number;
+  reorder_level: number;
+  low_stock: boolean;
+  lead_time_days: number | null;
+}
+
+export interface PurchaseOrderLine {
+  line_number: number;
+  part_number: string;
+  quantity: number;
+  received_quantity: number;
+  unit_price: number;
+}
+
+export interface PurchaseOrder {
+  order_number: string;
+  supplier: string;
+  supplier_code: string;
+  status: string;
+  ordered_at: string;
+  required_date: string | null;
+  currency: string;
+  value: number;
+  lines: PurchaseOrderLine[];
+}
+
+export interface DeployedUnit {
+  serial_number: string;
+  part_number: string;
+  unit_status: string;
+  customer_name: string;
+  site_name: string;
+  address: string | null;
+  commissioned_at: string | null;
+  status: string;
+}
+
+export interface FieldEvent {
+  id: string;
+  serial_number: string;
+  customer_name: string;
+  occurred_at: string;
+  event_type: string;
+  summary: string;
+  resolution: string | null;
+}
+
+export interface TrlGate {
+  id: string;
+  work_package: string;
+  programme: string | null;
+  trl: number;
+  trl_target: number;
+  status: string;
+  evidence: string | null;
+  approved_by: string | null;
+}
+
+export interface Deliverable {
+  code: string;
+  title: string;
+  work_package: string;
+  programme: string;
+  due_date: string;
+  status: string;
+}
+
+export interface CalibrationRecord {
+  id: string;
+  asset_tag: string;
+  asset_name: string;
+  location: string | null;
+  certificate_number: string;
+  calibrated_at: string;
+  valid_until: string;
+  result: string;
+  overdue: boolean;
+  due_soon: boolean;
+}
+
+export interface AssetBooking {
+  id: string;
+  asset_tag: string;
+  asset_name: string;
+  starts_at: string;
+  ends_at: string;
+  booked_by: string | null;
+  purpose: string;
+  status: string;
+}
+
+export interface CapacityRow {
+  user_id: string;
+  engineer: string | null;
+  week_start: string;
+  available_hours: number;
+  allocated_hours: number;
+  remaining_hours: number;
+  overloaded: boolean;
+  packages: Array<{ work_package: string; hours: number }>;
+}
+
+export interface TimesheetRow {
+  id: string;
+  engineer: string;
+  work_package: string | null;
+  work_date: string;
+  hours: number;
+  description: string | null;
+}
+
+/** The picker row on the quality screens. */
+export interface UnitSummary {
+  serial_number: string;
+  part_number: string;
+  built_to_revision: string | null;
+  status: UnitStatus;
+  built_at: string | null;
+  plant: string | null;
+  customer_ref: string | null;
+  sample_count: number;
+  fail_count: number;
+}
+
+export interface CapaAction {
+  kind: string;
+  description: string;
+  owner_label: string | null;
+  due_date: string | null;
+  completed_at: string | null;
+  effectiveness_check: string | null;
+}
+
+export interface NonConformance {
+  id: string;
+  number: string;
+  title: string;
+  description: string;
+  source: string;
+  severity: string;
+  status: string;
+  disposition: string;
+  disposition_note: string | null;
+  serial_number: string | null;
+  part_number: string | null;
+  lot_number: string | null;
+  raised_by_label: string;
+  raised_at: string;
+  closed_at: string | null;
+  escalated_ecr_number: string | null;
+  affected_units: string[];
+  actions: CapaAction[];
+}
+
+export interface IngestionRow {
+  id: string;
+  filename: string;
+  version: number;
+  status: string;
+  error: string | null;
+}
+
+// --- Agents and control ----------------------------------------------------
+
+/** One field- or row-level difference a proposal would make. */
+export interface ProposedChange {
+  kind: "add" | "remove" | "modify" | string;
+  /** What is changing, e.g. `BomEdge ECL-AMR-200 -> LFS-POR-010`. */
+  target: string;
+  field: string | null;
+  before: unknown;
+  after: unknown;
+}
+
+/** What a mutating tool returns instead of performing its mutation. */
+export interface ProposalPreview {
+  summary: string;
+  entity_type: string;
+  entity_ref: string | null;
+  changes: ProposedChange[];
+  warnings: string[];
+}
+
+export interface Proposal {
+  id: string;
+  created_at: string;
+  proposed_by_agent: string;
+  tool_name: string;
+  arguments: Record<string, unknown>;
+  summary: string;
+  preview: ProposalPreview;
+  required_role: string;
+  status: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  review_note: string | null;
+  applied_at: string | null;
+  result: Record<string, unknown> | null;
+}
+
+export interface AgentRun {
+  id: string;
+  correlation_id: string;
+  status: string;
+  domains: string[];
+  model: string | null;
+  duration_ms: number | null;
+  started_at: string;
+}
+
+export interface AuditEvent {
+  id: string;
+  occurred_at: string;
+  actor_type: string;
+  actor_label: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  reason: string | null;
+  correlation_id: string | null;
+}
+
+export interface EvalCase {
+  case_name: string;
+  category: string;
+  passed: boolean;
+  score: number;
+  detail: string | null;
+}
+
+export interface EvalRun {
+  id: string;
+  suite: string;
+  status: string;
+  passed: number;
+  failed: number;
+  metrics: Record<string, number> | null;
+  started_at: string;
+  cases: EvalCase[];
 }

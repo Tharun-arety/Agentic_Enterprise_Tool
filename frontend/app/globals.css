@@ -1,75 +1,205 @@
 @import "tailwindcss";
 
 /*
- * Magnotherm ERP theme.
- * Cool neutrals with a cyan accent — the product is a cooling system, and the
- * palette is doing double duty as a status language: cyan for the
- * magnetocaloric path, amber for magnets, slate for structure.
+ * Magnotherm bench theme.
+ *
+ * The palette is taken from the machine, not from a UI kit. A magnetocaloric
+ * chiller runs between a cold side and a hot side, so the two accents are a
+ * cold one and a warm one and they are used semantically: `cold` means in
+ * spec, on the released path, safe to act on; `warm` means approaching a
+ * limit. `breach` and `verified` are verdicts, never decoration. `field` marks
+ * the magnet path — the one place a third hue earns its keep, because the
+ * neodymium array is the one component class an engineer scans for.
+ *
+ * Grounds are graphite (the anodised chassis of a test rig) and vellum (a
+ * green-grey drafting paper, deliberately not cream). Radii stay at 2–4px:
+ * this is instrumentation, and soft pill corners would be borrowed clothing.
  */
 
 :root {
-  --background: #f6f7f9;
-  --surface: #ffffff;
-  --surface-muted: #f1f3f6;
-  --foreground: #0f172a;
-  --muted-foreground: #64748b;
-  --border: #e2e8f0;
-  --accent: #0891b2;
-  --accent-foreground: #ffffff;
-  --lafesi: #0891b2;
-  --neodymium: #b45309;
-  --polymer: #7c3aed;
-  --fluid: #0ea5e9;
-  --assembly: #475569;
-  --warning: #b45309;
+  color-scheme: light dark;
+
+  --ground: #eff0eb;
+  --panel: #ffffff;
+  --sunken: #e6e8e1;
+  --rail: #e9eae4;
+
+  --ink: #11151a;
+  --ink-dim: #5b6470;
+  --ink-faint: #8b94a0;
+
+  --rule: #d3d7cd;
+  --rule-strong: #b9bfb2;
+
+  --cold: #2f5fd0;
+  --cold-ink: #ffffff;
+  --cold-wash: #2f5fd014;
+
+  --warm: #b06f10;
+  --warm-wash: #b06f1014;
+
+  --breach: #c0392f;
+  --breach-wash: #c0392f14;
+
+  --verified: #1f7a4d;
+  --verified-wash: #1f7a4d14;
+
+  --field: #6d3fc4;
+  --field-wash: #6d3fc414;
+
+  /* Material classes on a bill of materials. Distinct hues, because an
+     engineer scans the tree by material before reading a single word. */
+  --mat-lafesi: #2f5fd0;
+  --mat-neodymium: #b06f10;
+  --mat-polymer: #6d3fc4;
+  --mat-fluid: #147d92;
+  --mat-steel: #5b6470;
+  --mat-composite: #8a5a2b;
+  --mat-assembly: #39414d;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0b1120;
-    --surface: #111a2e;
-    --surface-muted: #16203a;
-    --foreground: #e2e8f0;
-    --muted-foreground: #94a3b8;
-    --border: #1e293b;
-    --accent: #22d3ee;
-    --accent-foreground: #04212b;
-    --lafesi: #22d3ee;
-    --neodymium: #fbbf24;
-    --polymer: #a78bfa;
-    --fluid: #38bdf8;
-    --assembly: #94a3b8;
-    --warning: #fbbf24;
+    --ground: #0e1116;
+    --panel: #161b22;
+    --sunken: #11151b;
+    --rail: #0b0e13;
+
+    --ink: #e6e9e4;
+    --ink-dim: #98a1ad;
+    --ink-faint: #6b7482;
+
+    --rule: #232a33;
+    --rule-strong: #333c48;
+
+    --cold: #6494ff;
+    --cold-ink: #06101f;
+    --cold-wash: #6494ff1a;
+
+    --warm: #e8a33d;
+    --warm-wash: #e8a33d1a;
+
+    --breach: #f0665c;
+    --breach-wash: #f0665c1a;
+
+    --verified: #46c489;
+    --verified-wash: #46c4891a;
+
+    --field: #a684f5;
+    --field-wash: #a684f51a;
+
+    --mat-lafesi: #6494ff;
+    --mat-neodymium: #e8a33d;
+    --mat-polymer: #a684f5;
+    --mat-fluid: #3fb6cf;
+    --mat-steel: #98a1ad;
+    --mat-composite: #cf9a63;
+    --mat-assembly: #7d8794;
   }
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-surface: var(--surface);
-  --color-surface-muted: var(--surface-muted);
-  --color-foreground: var(--foreground);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-border: var(--border);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-lafesi: var(--lafesi);
-  --color-neodymium: var(--neodymium);
-  --color-polymer: var(--polymer);
-  --color-fluid: var(--fluid);
-  --color-assembly: var(--assembly);
-  --color-warning: var(--warning);
-  --font-sans: ui-sans-serif, system-ui, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+  --color-ground: var(--ground);
+  --color-panel: var(--panel);
+  --color-sunken: var(--sunken);
+  --color-rail: var(--rail);
+
+  --color-ink: var(--ink);
+  --color-ink-dim: var(--ink-dim);
+  --color-ink-faint: var(--ink-faint);
+
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+
+  --color-cold: var(--cold);
+  --color-cold-ink: var(--cold-ink);
+  --color-cold-wash: var(--cold-wash);
+  --color-warm: var(--warm);
+  --color-warm-wash: var(--warm-wash);
+  --color-breach: var(--breach);
+  --color-breach-wash: var(--breach-wash);
+  --color-verified: var(--verified);
+  --color-verified-wash: var(--verified-wash);
+  --color-field: var(--field);
+  --color-field-wash: var(--field-wash);
+
+  --color-mat-lafesi: var(--mat-lafesi);
+  --color-mat-neodymium: var(--mat-neodymium);
+  --color-mat-polymer: var(--mat-polymer);
+  --color-mat-fluid: var(--mat-fluid);
+  --color-mat-steel: var(--mat-steel);
+  --color-mat-composite: var(--mat-composite);
+  --color-mat-assembly: var(--mat-assembly);
+
+  --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, monospace;
+
+  --radius-panel: 4px;
+  --radius-chip: 3px;
+}
+
+html {
+  /* Anchored headings must clear the sticky title block. */
+  scroll-padding-top: 5rem;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: ui-sans-serif, system-ui, sans-serif;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  /* Instrument readouts must not jitter as digits change. */
+  font-variant-numeric: tabular-nums;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* Slim scrollbars so the chat rail and BOM tree don't feel heavy. */
+/*
+ * Identifiers are the real content of a PDM system: part numbers, serials,
+ * lots, revision letters, certificate numbers. Setting them all in one
+ * monospaced face makes them a visible class of thing rather than prose.
+ */
+.ident {
+  font-family: var(--font-mono);
+  font-feature-settings: "zero" 1;
+  letter-spacing: -0.01em;
+}
+
+/* Small caps classification labels — the drawing-frame zone strip. */
+.eyebrow {
+  font-size: 0.625rem;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* Hairline scale rule used behind the span bars and the title block. */
+.tick-rule {
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--rule) 0 1px,
+    transparent 1px 8px
+  );
+}
+
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
+  scrollbar-color: var(--rule-strong) transparent;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--cold);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

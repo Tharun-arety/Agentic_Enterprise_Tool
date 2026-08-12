@@ -12,7 +12,6 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.core.principal import ActorType, Principal
 from app.core.db import get_session
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from app.core.security import TokenError, decode_access_token
 from app.domains.identity.models import AccessTokenRevocation, Role, User
 

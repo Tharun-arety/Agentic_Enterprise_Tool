@@ -19,7 +19,7 @@ from app.domains.ecm.models import ChangeBoardReview, ChangeOrder, ChangeRequest
 from app.domains.knowledge.models import SourceDocumentVersion
 from app.domains.pdm.models import Part
 from app.domains.procurement.models import GoodsReceipt, ReceiptLot, StockPosition
-from app.domains.qms.models import LabTestRecord, NonConformance, TestResult, Unit, UnitComponent
+from app.domains.qms.models import LabTestRecord, NonConformance, TestResult, Unit
 
 router = APIRouter(prefix="/api/showcase", tags=["showcase"])
 

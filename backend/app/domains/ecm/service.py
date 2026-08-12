@@ -231,8 +231,20 @@ async def get_change_request(session: AsyncSession, number: str) -> ChangeReques
 
 
 async def list_change_requests(
-    session: AsyncSession, status: str | None = None, limit: int = 50
+    session: AsyncSession,
+    *,
+    status: str | None = None,
+    priority: str | None = None,
+    limit: int = 50,
 ) -> list[ChangeRequestOut]:
+    """Change requests, newest first, optionally narrowed.
+
+    Keyword-only past `session` on purpose. `priority` was inserted between the
+    existing `status` and `limit`, and the one positional caller silently
+    re-bound its limit of 50 onto it — the change board screen started
+    reporting "Unknown priority 50". Naming the arguments makes inserting
+    another filter a non-event.
+    """
     query = (
         select(ChangeRequest)
         .order_by(ChangeRequest.created_at.desc())
@@ -249,6 +261,14 @@ async def list_change_requests(
         except ValueError:
             options = ", ".join(state.value for state in EcrStatus)
             raise ToolError(f"Unknown status {status!r}. One of: {options}") from None
+    # Filtering by priority was missing, so "which changes are urgent" had no
+    # query behind it and the caller had to pull every request and sort it out.
+    if priority:
+        try:
+            query = query.where(ChangeRequest.priority == ChangePriority(priority))
+        except ValueError:
+            options = ", ".join(level.value for level in ChangePriority)
+            raise ToolError(f"Unknown priority {priority!r}. One of: {options}") from None
     rows = (await session.execute(query)).scalars().all()
     return [await _to_out(session, row) for row in rows]
 

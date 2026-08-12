@@ -9,8 +9,11 @@ an order is the systems-engineering authority to move the configuration.
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.enums import enum_text
 from app.core.principal import SYSTEM_PRINCIPAL, Principal
 from app.core.schemas import ProposalPreview, ProposedChange
 from app.domains.ecm.models import ChangeOrigin, ChangePriority
@@ -56,6 +59,41 @@ register(
 )
 
 
+async def _list_change_requests(
+    session: AsyncSession,
+    status: str | None = None,
+    priority: str | None = None,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """List change requests, and explain an empty result rather than just returning one.
+
+    Models over-constrain. Asked "which change requests are urgent", one added
+    `status="Under review"` of its own accord; the only urgent request is
+    `Converted`, so the pair matched nothing and the answer became "none are
+    marked urgent" — confidently wrong. An empty result that says which filter
+    excluded everything gives the model something to correct itself with.
+    """
+    rows = await list_change_requests(
+        session, status=status, priority=priority, limit=limit
+    )
+    payload: dict[str, Any] = {
+        "filters": {"status": status, "priority": priority},
+        "count": len(rows),
+        "requests": [row.model_dump(mode="json") for row in rows],
+    }
+    if not rows and (status or priority):
+        relaxed = await list_change_requests(session, limit=limit)
+        payload["hint"] = (
+            f"No change request matches those filters. {len(relaxed)} exist in total: "
+            + "; ".join(
+                f"{row.number} ({enum_text(row.priority)}, {enum_text(row.status)})"
+                for row in relaxed
+            )
+            + ". Drop a filter and look again rather than reporting none."
+        )
+    return payload
+
+
 register(
     ToolSpec(
         name="list_change_requests",
@@ -63,8 +101,14 @@ register(
         description=(
             "List engineering change requests, most recent first, optionally "
             "filtered by status (Draft, Submitted, Under review, Approved, "
-            "Rejected, Converted, Cancelled). Use this for questions about what "
-            "changes are in flight or waiting on the board."
+            "Rejected, Converted, Cancelled) and by priority (Low, Normal, "
+            "High, Urgent). Use this for questions about what changes are in "
+            "flight, which are urgent, or what is waiting on the board. "
+            "If the question names a priority, pass it as `priority` and "
+            "report exactly what comes back — do not filter the list yourself "
+            "and do not describe a High request as urgent. Only add `status` "
+            "if the question actually asks about a stage; a request can be "
+            "Urgent and already Converted."
         ),
         parameters={
             "type": "object",
@@ -73,12 +117,17 @@ register(
                     "type": "string",
                     "description": "Optional status filter, e.g. 'Under review'.",
                 },
+                "priority": {
+                    "type": "string",
+                    "enum": [level.value for level in ChangePriority],
+                    "description": "Optional priority filter, e.g. 'Urgent'.",
+                },
                 "limit": {"type": "integer", "minimum": 1, "maximum": 100},
             },
             "required": [],
             "additionalProperties": False,
         },
-        handler=list_change_requests,
+        handler=_list_change_requests,
     )
 )
 

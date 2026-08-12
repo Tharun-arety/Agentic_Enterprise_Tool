@@ -18,7 +18,10 @@ from __future__ import annotations
 
 import logging
 import asyncio
+import enum
 import uuid
+from datetime import date, datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -137,6 +140,30 @@ def tools_for_domain(domain: str) -> list[ToolSpec]:
     return [spec for spec in TOOL_REGISTRY.values() if spec.domain == domain]
 
 
+def _jsonable(value: Any) -> Any:
+    """Recursively reduce a tool result to JSON-safe primitives.
+
+    This used to be a single `model_dump` on the top-level value, which covered
+    a tool returning one model and quietly missed a tool returning a *list* of
+    them. `list_change_requests` is exactly that: the payload stayed a list of
+    `ChangeRequestOut` objects, so the model received their `repr()` and
+    persisting the invocation blew up with "Object of type ChangeRequestOut is
+    not JSON serializable" — which surfaced as the tool call simply not
+    happening.
+    """
+    if hasattr(value, "model_dump"):
+        return value.model_dump(mode="json")
+    if isinstance(value, dict):
+        return {key: _jsonable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(item) for item in value]
+    if isinstance(value, (uuid.UUID, datetime, date, Decimal)):
+        return str(value)
+    if isinstance(value, enum.Enum):
+        return value.value
+    return value
+
+
 async def run_tool(
     session: AsyncSession,
     name: str,
@@ -177,7 +204,7 @@ async def run_tool(
         logger.warning("Tool %s called with bad arguments %r: %s", name, arguments, exc)
         return {"error": f"Invalid arguments for {name}: {exc}"}
 
-    payload = result.model_dump(mode="json") if hasattr(result, "model_dump") else result
+    payload = _jsonable(result)
     if not isinstance(payload, dict):
         payload = {"result": payload}
     if not spec.mutates:

@@ -1,159 +1,124 @@
 "use client";
 
 import * as React from "react";
-import { Bot, CornerDownLeft, Loader2, User, Wrench } from "lucide-react";
+import { CornerDownLeft, Loader2, MessageSquarePlus, Wrench, X } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { streamAgent } from "@/lib/agent-stream";
+import { useAgentChat } from "@/components/AgentChatProvider";
 import { cn } from "@/lib/utils";
-import type {
-  AgentStateFrame,
-  BomResponse,
-  ChatTurn,
-  QmsResponse,
-  ToolResultFrame,
-} from "@/lib/types";
+import type { AgentStateFrame } from "@/lib/types";
 
 const SUGGESTIONS = [
-  "What is the ECLIPSE 1kW chiller made of?",
+  "What is the ECLIPSE 1 kW chiller made of?",
   "Trace lot MAG-L-2312 to affected units and quality findings",
-  "Show ECR-26-002 impact, CCB status, and cost exposure",
+  "Show ECR-26-002 impact, CCB status and cost exposure",
 ];
 
-const STATUS_LABEL: Record<AgentStateFrame["status"], string> = {
-  thinking: "Thinking",
-  delegating: "Delegating to",
-  calling_tool: "Calling",
-  done: "Done",
-};
+/** How close to the bottom still counts as following the answer, in pixels. */
+const PINNED_SLACK = 48;
 
 function statusLine(frame: AgentStateFrame): string {
-  if (frame.status === "delegating") return `Delegating to ${frame.agent}…`;
-  if (frame.status === "calling_tool") return `${frame.agent}: ${frame.detail}…`;
+  if (frame.status === "delegating") return `Routing to ${frame.agent}…`;
+  if (frame.status === "calling_tool") return `${frame.agent} · ${frame.detail}…`;
   if (frame.status === "thinking") return `${frame.agent} is thinking…`;
-  return `${STATUS_LABEL[frame.status]}`;
+  return "Done";
 }
 
-export function AgentChatSidebar({
-  onBom,
-  onQms,
-}: {
-  onBom?: (bom: BomResponse) => void;
-  onQms?: (qms: QmsResponse) => void;
-}) {
-  const [turns, setTurns] = React.useState<ChatTurn[]>([]);
-  const [draft, setDraft] = React.useState("");
-  const [streaming, setStreaming] = React.useState("");
-  const [agentState, setAgentState] = React.useState<AgentStateFrame | null>(null);
-  const [busy, setBusy] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+/**
+ * The agent panel. It renders the conversation; it does not own it — the state
+ * lives in `AgentChatProvider`, above the router, so changing section does not
+ * discard the exchange you changed section to verify.
+ */
+export function AgentChatSidebar({ onClose }: { onClose?: () => void }) {
+  const { turns, draft, setDraft, streaming, agentState, busy, error, send, reset } =
+    useAgentChat();
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
+  /**
+   * Follow the answer only while the reader is already at the bottom. Scrolling
+   * up to re-read an earlier paragraph used to be undone by the next token.
+   */
+  const pinned = React.useRef(true);
+
+  const trackPinned = React.useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < PINNED_SLACK;
+  }, []);
+
   React.useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+    const el = scrollRef.current;
+    if (!el || !pinned.current) return;
+    el.scrollTo({ top: el.scrollHeight });
   }, [turns, streaming, agentState]);
 
-  /**
-   * Structured tool payloads are routed to the dashboard by tool name. The
-   * chat pane never parses the model's prose to find data — the data arrives
-   * on its own frame type.
-   */
-  const applyToolResult = React.useCallback(
-    (frame: ToolResultFrame) => {
-      if (frame.tool === "get_bom_structure") {
-        onBom?.(frame.payload as BomResponse);
-      } else if (frame.tool === "query_qms_test_metrics") {
-        onQms?.(frame.payload as QmsResponse);
-      }
+  /** Asking is an act of attention: re-pin to the bottom for the reply. */
+  const ask = React.useCallback(
+    (message: string) => {
+      pinned.current = true;
+      void send(message);
     },
-    [onBom, onQms],
+    [send],
   );
 
-  const send = React.useCallback(
-    async (message: string) => {
-      const text = message.trim();
-      if (!text || busy) return;
-
-      setBusy(true);
-      setError(null);
-      setDraft("");
-      const history = turns.slice(-10);
-      setTurns((prev) => [...prev, { role: "user", content: text }]);
-
-      let assembled = "";
-      try {
-        for await (const frame of streamAgent(text, history)) {
-          switch (frame.event) {
-            case "agent_state":
-              setAgentState(frame.data);
-              break;
-            case "tool_result":
-              applyToolResult(frame.data);
-              break;
-            case "token":
-              assembled += frame.data.text;
-              setStreaming(assembled);
-              break;
-            case "final":
-              // The final frame is authoritative; the streamed text was a
-              // preview of it.
-              assembled = frame.data.text || assembled;
-              break;
-            case "error":
-              setError(frame.data.message);
-              break;
-          }
-        }
-      } catch (cause) {
-        setError(
-          cause instanceof Error
-            ? cause.message
-            : "Could not reach the agent backend.",
-        );
-      } finally {
-        if (assembled.trim()) {
-          setTurns((prev) => [
-            ...prev,
-            { role: "assistant", content: assembled.trim() },
-          ]);
-        }
-        setStreaming("");
-        setAgentState(null);
-        setBusy(false);
-      }
-    },
-    [applyToolResult, busy, turns],
-  );
+  const hasConversation = turns.length > 0 || Boolean(streaming) || Boolean(error);
 
   return (
-    <aside className="bg-surface border-border flex h-full w-full flex-col border-l">
-      <header className="border-border flex items-center gap-2 border-b px-4 py-3">
-        <span className="bg-accent/10 text-accent rounded-md p-1.5">
-          <Bot className="size-4" />
-        </span>
-        <div className="min-w-0">
-          <h2 className="text-sm font-semibold">Engineering Agent</h2>
-          <p className="text-muted-foreground truncate text-[11px]">
-            10 domain agents · governed tools
-          </p>
+    <aside className="bg-rail border-rule flex h-full min-h-0 w-full flex-col overflow-hidden border-l">
+      <header className="border-rule flex shrink-0 items-center gap-2 border-b px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <p className="eyebrow">Governed tools</p>
+          <h2 className="mt-1 truncate text-sm font-semibold tracking-tight">
+            Engineering agent
+          </h2>
         </div>
+        {hasConversation && (
+          <button
+            type="button"
+            onClick={() => {
+              pinned.current = true;
+              reset();
+            }}
+            aria-label="Clear the conversation"
+            title="New conversation"
+            className="border-rule rounded-chip hover:bg-sunken border p-1.5 transition-colors"
+          >
+            <MessageSquarePlus className="size-3.5" aria-hidden="true" />
+          </button>
+        )}
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close the agent"
+            className="border-rule rounded-chip hover:bg-sunken border p-1.5 transition-colors"
+          >
+            <X className="size-3.5" aria-hidden="true" />
+          </button>
+        )}
       </header>
 
-      <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+      <div
+        ref={scrollRef}
+        onScroll={trackPinned}
+        data-testid="agent-transcript"
+        className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4"
+      >
         {turns.length === 0 && !streaming && (
           <div className="space-y-3">
-            <p className="text-muted-foreground text-xs leading-relaxed">
-              Ask about product structure, measured performance, or design
-              history. The router picks a specialist agent and its tool output
-              renders in the dashboard.
+            <p className="text-ink-dim text-pretty text-xs leading-5">
+              Ask about product structure, measured performance or design history.
+              A router picks the specialist agent; anything that would change a
+              record is filed for approval instead of applied. The thread follows
+              you between sections and clears only when you reload the view or
+              start a new conversation.
             </p>
             <div className="space-y-1.5">
               {SUGGESTIONS.map((suggestion) => (
                 <button
                   key={suggestion}
                   type="button"
-                  onClick={() => void send(suggestion)}
-                  className="border-border hover:border-accent/50 hover:bg-surface-muted w-full rounded-lg border px-2.5 py-2 text-left text-xs transition"
+                  onClick={() => ask(suggestion)}
+                  className="border-rule rounded-chip hover:border-cold hover:bg-sunken w-full border px-2.5 py-2 text-left text-xs leading-5 transition-colors"
                 >
                   {suggestion}
                 </button>
@@ -163,94 +128,96 @@ export function AgentChatSidebar({
         )}
 
         {turns.map((turn, index) => (
-          <div key={index} className="flex gap-2.5">
-            <span
+          <div key={index} className="min-w-0">
+            <p className="eyebrow mb-1">{turn.role === "user" ? "You" : "Agent"}</p>
+            <p
               className={cn(
-                "mt-0.5 shrink-0 rounded-md p-1",
-                turn.role === "user"
-                  ? "bg-surface-muted text-muted-foreground"
-                  : "bg-accent/10 text-accent",
+                "min-w-0 whitespace-pre-wrap break-words text-xs leading-5",
+                turn.role === "user" && "text-ink-dim",
               )}
             >
-              {turn.role === "user" ? (
-                <User className="size-3.5" />
-              ) : (
-                <Bot className="size-3.5" />
-              )}
-            </span>
-            <p className="min-w-0 flex-1 text-xs leading-relaxed whitespace-pre-wrap">
               {turn.content}
             </p>
           </div>
         ))}
 
         {streaming && (
-          <div className="flex gap-2.5">
-            <span className="bg-accent/10 text-accent mt-0.5 shrink-0 rounded-md p-1">
-              <Bot className="size-3.5" />
-            </span>
-            <p className="min-w-0 flex-1 text-xs leading-relaxed whitespace-pre-wrap">
+          <div className="min-w-0">
+            <p className="eyebrow mb-1">Agent</p>
+            <p className="min-w-0 whitespace-pre-wrap break-words text-xs leading-5">
               {streaming}
-              <span className="bg-accent ml-0.5 inline-block h-3 w-1 animate-pulse align-middle" />
+              <span className="bg-cold ml-0.5 inline-block h-3 w-1 animate-pulse align-middle" />
             </p>
           </div>
         )}
 
-        {agentState && (
-          <div
-            data-testid="agent-state"
-            className="text-accent bg-accent/5 border-accent/20 flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium"
-          >
-            {agentState.status === "calling_tool" ? (
-              <Wrench className="size-3 shrink-0" />
-            ) : (
-              <Loader2 className="size-3 shrink-0 animate-spin" />
-            )}
-            <span className="truncate">{statusLine(agentState)}</span>
-          </div>
-        )}
-
-        {error && (
-          <p className="text-warning border-warning/30 bg-warning/5 rounded-lg border px-2.5 py-1.5 text-[11px]">
-            {error}
-          </p>
-        )}
+        <div aria-live="polite">
+          {agentState && (
+            <div
+              data-testid="agent-state"
+              className="text-cold bg-cold-wash rounded-chip flex items-center gap-2 px-2.5 py-1.5 text-[11px] font-medium"
+            >
+              {agentState.status === "calling_tool" ? (
+                <Wrench className="size-3 shrink-0" aria-hidden="true" />
+              ) : (
+                <Loader2 className="size-3 shrink-0 animate-spin" aria-hidden="true" />
+              )}
+              <span className="truncate">{statusLine(agentState)}</span>
+            </div>
+          )}
+          {error && (
+            <p role="alert" className="text-breach bg-breach-wash rounded-chip px-2.5 py-1.5 text-[11px] leading-4">
+              {error}
+            </p>
+          )}
+        </div>
       </div>
 
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          void send(draft);
+          ask(draft);
         }}
-        className="border-border border-t p-3"
+        className="border-rule shrink-0 border-t p-3"
       >
-        <div className="border-border focus-within:border-accent/60 flex items-end gap-2 rounded-lg border px-2.5 py-2 transition">
+        <label htmlFor="agent-prompt" className="sr-only">
+          Ask the engineering agent
+        </label>
+        <div className="border-rule rounded-panel focus-within:border-cold flex items-end gap-2 border px-2.5 py-2 transition-colors">
           <textarea
+            id="agent-prompt"
+            name="prompt"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
-                void send(draft);
+                ask(draft);
               }
             }}
             rows={2}
-            disabled={busy}
-            placeholder="Ask about a part, a serial, or an ECO…"
-            className="max-h-32 min-h-[2.5rem] flex-1 resize-none bg-transparent text-xs outline-none disabled:opacity-50"
+            autoComplete="off"
+            placeholder={
+              busy
+                ? "Answering — send your next question once this finishes…"
+                : turns.length
+                  ? "Ask a follow-up…"
+                  : "Ask about a part, a serial or an ECO…"
+            }
+            className="max-h-32 min-h-[2.5rem] min-w-0 flex-1 resize-none bg-transparent text-xs leading-5 outline-none"
           />
-          <Button
+          <button
             type="submit"
             disabled={busy || !draft.trim()}
-            className="shrink-0 px-2 py-1.5"
-            aria-label="Send message"
+            aria-label="Send Message"
+            className="bg-cold text-cold-ink rounded-chip shrink-0 p-1.5 transition-opacity disabled:opacity-40"
           >
             {busy ? (
-              <Loader2 className="size-3.5 animate-spin" />
+              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
             ) : (
-              <CornerDownLeft className="size-3.5" />
+              <CornerDownLeft className="size-3.5" aria-hidden="true" />
             )}
-          </Button>
+          </button>
         </div>
       </form>
     </aside>

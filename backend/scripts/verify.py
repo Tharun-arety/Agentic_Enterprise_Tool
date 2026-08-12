@@ -334,7 +334,16 @@ async def step_3_tools() -> None:
 
         # --- ECM ---------------------------------------------------------
         requests = await list_change_requests(session)
-        check(len(requests) == 2, "2 operational change requests seeded", f"(got {len(requests)})")
+        # Assert the seeded story is intact, not that nobody has used the app.
+        # This was `== 2`, which failed the moment someone approved the pending
+        # `raise_change_request` proposal in the inbox and it correctly created
+        # a third — the write spine working as designed, reported as a defect.
+        numbers = {item.number for item in requests}
+        check(
+            {"ECR-26-001", "ECR-26-002"} <= numbers,
+            "both seeded change requests present",
+            f"(got {sorted(numbers)})",
+        )
         ecr = next(item for item in requests if item.number == "ECR-26-001")
         check(
             ecr.affected_part_numbers == ["SEA-ORG-004"],

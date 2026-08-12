@@ -9,7 +9,7 @@ from langgraph.graph import END,START,StateGraph
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession,async_sessionmaker
 from app.agents.models import AgentRun,ToolInvocation
-from app.agents.schemas import AgentStateFrame,Citation,TokenFrame,ToolResultFrame
+from app.agents.schemas import AgentStateFrame,TokenFrame,ToolResultFrame
 from app.core.config import get_settings
 from app.core.llm import ModelClient,TokenUsage,ToolCall,get_model_client
 from app.core.principal import agent_principal
@@ -17,11 +17,12 @@ from app.tools import loader  # noqa
 from app.tools.registry import run_tool,tools_for_domain
 
 Emitter=Callable[[str,BaseModel],Awaitable[None]]
-DOMAINS=("pdm","ecm","qms","procurement","crm","programs","assets","resources","controlling","knowledge")
+DOMAINS=("operations","pdm","ecm","qms","procurement","crm","programs","assets","resources","controlling","knowledge")
 PROMPT_VERSION="2026-08-10.v1"
 class AgentState(TypedDict,total=False):
     user_message:str; history:list[dict[str,Any]]; domains:list[str]; intent:str; rationale:str; tool_calls:list[str]; tool_payloads:list[dict[str,Any]]; evidence:str; final_text:str; run_id:uuid.UUID; correlation_id:uuid.UUID; citations:list[dict]; proposal_summaries:list[dict]
 ROUTER_PROMPT="""Route this Magnotherm enterprise question to zero to three evidence domains.
+- operations: what is urgent, outstanding, pending, overdue or awaiting approval, ranked across every domain. Route here for "what needs attention", "what is urgent", "what is pending", "what should I do next" and anything asking for a priority across the business rather than facts about one record.
 - pdm: parts, revisions, EBOM/MBOM, components, materials, where-used, compliance
 - ecm: ECR/ECO/ECN, impact assessments, CCB decisions and effectivity
 - qms: serials, genealogy, tests, failures, NCR and CAPA
@@ -46,6 +47,12 @@ def _domain_hints(message:str)->list[str]:
     """Deterministic safety net for obvious entity/domain language."""
     text=message.lower()
     terms={
+        # Cross-domain triage language. Listed first because a question like
+        # "what is the urgent priority" names no entity at all, and without
+        # these the router used to guess two plausible domains, find no tool
+        # that ranks anything, and answer that the question was not
+        # determinable.
+        "operations":("urgent","priority","priorities","pending","outstanding","overdue","needs attention","need attention","attention","awaiting","waiting on","waiting for","what should i","action items","to-do","todo","open items","backlog","at risk","approval queue","sign-off","sign off"),
         "pdm":("made of","bom","ebom","mbom","component","assembly","part number","revision","where used","material"),
         "qms":("serial","test","failure","failed","ncr","non-conformance","capa","genealogy","affected unit"),
         "ecm":("ecr","eco","ecn","ccb","change request","change order","effectivity","impact assessment"),
@@ -59,6 +66,14 @@ def _domain_hints(message:str)->list[str]:
     }
     scored=[(sum(text.count(term) for term in needles),domain) for domain,needles in terms.items()]
     selected=[domain for score,domain in sorted(scored,key=lambda item:(-item[0],item[1])) if score>0][:3]
+    # Operations is a fallback, not an extra lens. "Which change requests are
+    # marked urgent?" hits both `ecm` and `operations`, and running both fed
+    # the synthesiser two evidence sets it happily blended — lapsed calibration
+    # and low stock were reported back as urgent *change requests*. When the
+    # question names a domain's own vocabulary, that domain answers it; the
+    # cross-domain ranking is for questions that name nothing.
+    if len(selected)>1 and "operations" in selected:
+        selected=[domain for domain in selected if domain!="operations"]
     # A specific ECR already carries its immutable baseline cost delta inside
     # the impact assessment. Do not start a second controlling agent merely
     # because the user says "cost exposure"; reserve it for ledger/variance

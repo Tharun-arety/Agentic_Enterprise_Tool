@@ -5,13 +5,16 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_session
 from app.core.deps import require_roles
 from app.core.principal import Principal
 from app.domains.identity.models import Role
+from app.domains.pdm.models import Part, PartRevision
 from app.domains.qms import ncr as ncr_service
+from app.domains.qms.models import LabTestRecord, TestResult, Unit
 from app.domains.qms.schemas import (
     DispositionRequest,
     LotTrace,
@@ -39,6 +42,70 @@ def _http(exc: ToolError) -> HTTPException:
     else:
         code = status.HTTP_400_BAD_REQUEST
     return HTTPException(status_code=code, detail=message)
+
+
+@router.get("/units")
+async def list_units(session: Annotated[AsyncSession, Depends(get_session)]):
+    """Every built article, with its acceptance-test tally.
+
+    The quality screens are all "pick a serial, then look at it", and a picker
+    that cannot say which serials failed anything makes the reader open each
+    one in turn to find out.
+    """
+    rows = (
+        await session.execute(
+            select(
+                Unit.serial_number,
+                Part.part_number,
+                PartRevision.revision,
+                Unit.status,
+                Unit.built_at,
+                Unit.plant,
+                Unit.customer_ref,
+                func.count(LabTestRecord.id),
+                func.count(LabTestRecord.id).filter(
+                    LabTestRecord.result == TestResult.FAIL
+                ),
+            )
+            .join(Part, Part.id == Unit.part_id)
+            .outerjoin(PartRevision, PartRevision.id == Unit.built_to_revision_id)
+            .outerjoin(LabTestRecord, LabTestRecord.unit_id == Unit.id)
+            .group_by(
+                Unit.serial_number,
+                Part.part_number,
+                PartRevision.revision,
+                Unit.status,
+                Unit.built_at,
+                Unit.plant,
+                Unit.customer_ref,
+            )
+            .order_by(Unit.built_at.desc().nullslast(), Unit.serial_number)
+        )
+    ).all()
+    return [
+        {
+            "serial_number": serial_number,
+            "part_number": part_number,
+            "built_to_revision": revision,
+            "status": status_value.value if hasattr(status_value, "value") else status_value,
+            "built_at": built_at,
+            "plant": plant,
+            "customer_ref": customer_ref,
+            "sample_count": sample_count,
+            "fail_count": fail_count,
+        }
+        for (
+            serial_number,
+            part_number,
+            revision,
+            status_value,
+            built_at,
+            plant,
+            customer_ref,
+            sample_count,
+            fail_count,
+        ) in rows
+    ]
 
 
 @router.get("/qms/{serial_number}", response_model=QmsResponse)

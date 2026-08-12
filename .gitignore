@@ -31,3 +31,7 @@ backend/var/
 # --- OS -------------------------------------------------------------------
 .DS_Store
 Thumbs.db
+
+# --- Claude Code ----------------------------------------------------------
+# Personal, machine-local permission rules. Not team configuration.
+.claude/settings.local.json
